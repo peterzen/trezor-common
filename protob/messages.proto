@@ -92,7 +92,16 @@ enum MessageType {
 	MessageType_DebugLinkMemoryRead = 110 [(wire_debug_in) = true];
 	MessageType_DebugLinkMemory = 111 [(wire_debug_out) = true];
 	MessageType_DebugLinkMemoryWrite = 112 [(wire_debug_in) = true];
-	MessageType_DebugLinkFlashErase = 113 [(wire_debug_in) = true];
+  MessageType_DebugLinkFlashErase = 113 [(wire_debug_in) = true];
+  MessageType_DecredLoadDevice = 114 [(wire_in) = true];
+  MessageType_DecredGetAddress = 115 [(wire_in) = true];
+  MessageType_DecredAddress = 116 [(wire_out) = true];
+  MessageType_DecredEntropyAck = 117 [(wire_in) = true];
+  MessageType_DecredSignMessage = 118 [(wire_in) = true];
+  MessageType_DecredVerifyMessage = 119 [(wire_in) = true];
+  MessageType_DecredSignTx = 120 [(wire_in) = true];
+  MessageType_DecredTxAck = 121 [(wire_in) = true];
+  MessageType_DecredTxRequest = 122 [(wire_out) = true];
 }
 
 ////////////////////
@@ -368,6 +377,107 @@ message LoadDevice {
 	optional string label = 6;				// device label
 	optional bool skip_checksum = 7;			// do not test mnemonic for valid BIP-39 checksum
 	optional uint32 u2f_counter = 8;			// U2F counter
+}
+
+/**
+ * Request: Load Decred seed PGP word list from the computer
+ * @next ButtonRequest
+ * @next Success
+ * @next Failure
+ */
+message DecredLoadDevice {
+	optional string mnemonic = 1;				// seed encoded as BIP-39 mnemonic (12, 18 or 24 words)
+	optional HDNodeType node = 2;				// BIP-32 node
+	optional string pin = 3;				// set PIN protection
+	optional bool passphrase_protection = 4;		// enable master node encryption using passphrase
+	optional string language = 5 [default='english'];	// device language
+	optional string label = 6;				// device label
+	optional uint32 u2f_counter = 7;			// U2F counter
+}
+
+/**
+ * Request: Ask device for Decred address corresponding to address_n path
+ * @next PassphraseRequest
+ * @next DecredAddress
+ * @next Failure
+ */
+message DecredGetAddress {
+	repeated uint32 address_n = 1;			// BIP-32 path to derive the key from master node
+	optional bool show_display = 2;			// optionally show on display before sending the result
+}
+
+/**
+ * Response: Contains an Decred address derived from device private seed
+ * @prev DecredGetAddress
+ */
+message DecredAddress {
+  required string address = 1;        // Base58 encoded address string
+}
+
+/**
+ * Request: Provide additional entropy for seed generation function (Decred variant)
+ * @prev EntropyRequest
+ * @next ButtonRequest
+ */
+message DecredEntropyAck {
+	optional bytes entropy = 1;				// 256 bits (32 bytes) of random data
+}
+
+/**
+ * Request: Ask device to sign message (Decred variant)
+ * @next MessageSignature
+ * @next Failure
+ */
+message DecredSignMessage {
+	repeated uint32 address_n = 1;				// BIP-32 path to derive the key from master node
+	required bytes message = 2;				// message to be signed
+}
+
+/**
+ * Request: Ask device to verify message (Decred variant)
+ * @next Success
+ * @next Failure
+ */
+message DecredVerifyMessage {
+	optional string address = 1;				// address to verify
+	optional bytes signature = 2;				// signature to verify
+	optional bytes message = 3;				// message to verify
+}
+
+/**
+ * Request: Ask device to sign transaction (Decred variant)
+ * @next PassphraseRequest
+ * @next PinMatrixRequest
+ * @next DecredTxRequest
+ * @next Failure
+ */
+message DecredSignTx {
+	required uint32 outputs_count = 1;			// number of transaction outputs
+	required uint32 inputs_count = 2;			// number of transaction inputs
+	optional uint32 version = 4 [default=1];		// transaction version
+	optional uint32 lock_time = 5 [default=0];		// transaction lock_time
+}
+
+/**
+ * Response: Device asks for information for signing Decred transaction or returns the last result
+ * If request_index is set, device awaits TxAck message (with fields filled in according to request_type)
+ * If signature_index is set, 'signature' contains signed input of signature_index's input
+ * @prev DecredSignTx
+ * @prev DecredTxAck
+ */
+message DecredTxRequest {
+	optional RequestType request_type = 1;			// what should be filled in TxAck message?
+	optional TxRequestDetailsType details = 2;		// request for tx details
+	optional TxRequestSerializedType serialized = 3;	// serialized data and request for next
+}
+
+/**
+ * Request: Decred Reported transaction data
+ * @prev DecredTxRequest
+ * @next DecredTxRequest
+ */
+message DecredTxAck {
+	optional DecredTransactionType tx = 1;
 }
 
 /**
